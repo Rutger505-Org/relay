@@ -22,6 +22,13 @@
       "when": 1757018430876,
       "tag": "0002_panoramic_enchantress",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1780441654174,
+      "tag": "0003_friends_and_dms",
+      "breakpoints": true
     }
   ]
 }

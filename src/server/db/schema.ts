@@ -5,6 +5,7 @@ import {
   integer,
   sqliteTable,
   text,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
 /**
@@ -108,3 +109,65 @@ export const verification = sqliteTable("verification", {
     .$onUpdate(() => new Date())
     .notNull(),
 });
+
+/**
+ * Friendships between users. A single row represents the relationship between
+ * the requester and the addressee. Status moves pending -> accepted, or the row
+ * is removed on decline/unfriend. `blocked` keeps the row to suppress re-adds.
+ */
+export const friendship = sqliteTable(
+  "friendship",
+  {
+    id: int("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
+    requesterId: text("requester_id", { length: 255 })
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    addresseeId: text("addressee_id", { length: 255 })
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    status: text("status", { enum: ["pending", "accepted", "blocked"] })
+      .notNull()
+      .default("pending"),
+    createdAt: int("created_at", { mode: "timestamp" })
+      .default(sql`(unixepoch())`)
+      .notNull(),
+    updatedAt: int("updated_at", { mode: "timestamp" }).$onUpdate(
+      () => new Date(),
+    ),
+  },
+  (t) => ({
+    requesterIdx: index("friendship_requester_idx").on(t.requesterId),
+    addresseeIdx: index("friendship_addressee_idx").on(t.addresseeId),
+    pairUnique: uniqueIndex("friendship_pair_unique").on(
+      t.requesterId,
+      t.addresseeId,
+    ),
+  }),
+);
+
+/**
+ * Direct messages between two users. All delivery is server-side; this table is
+ * the source of truth that clients read from (realtime push comes later).
+ */
+export const dmMessage = sqliteTable(
+  "dm_message",
+  {
+    id: int("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
+    senderId: text("sender_id", { length: 255 })
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    recipientId: text("recipient_id", { length: 255 })
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    createdAt: int("created_at", { mode: "timestamp" })
+      .default(sql`(unixepoch())`)
+      .notNull(),
+    readAt: int("read_at", { mode: "timestamp" }),
+  },
+  (t) => ({
+    senderIdx: index("dm_sender_idx").on(t.senderId),
+    recipientIdx: index("dm_recipient_idx").on(t.recipientId),
+    createdIdx: index("dm_created_idx").on(t.createdAt),
+  }),
+);
