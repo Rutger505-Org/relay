@@ -1,0 +1,2 @@
+# Include folder but exclude all files (such as sqlite database)
+*
