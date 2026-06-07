@@ -15,7 +15,18 @@ import type { dmMessage } from "@/server/db/schema";
 export type RealtimeEvent =
   | { type: "dm"; message: typeof dmMessage.$inferSelect }
   | { type: "typing"; fromUserId: string; typing: boolean }
-  | { type: "presence"; userId: string; online: boolean };
+  | { type: "presence"; userId: string; online: boolean }
+  // A friendship changed (request received/accepted/declined/removed). The
+  // client just refetches its friend queries when it sees this.
+  | { type: "friends" }
+  // 1:1 voice call signaling. All media flows through the LiveKit SFU, so it
+  // is always server-relayed (never peer-to-peer).
+  | {
+      type: "call";
+      kind: "ring" | "accept" | "decline" | "cancel" | "hangup";
+      fromUserId: string;
+      roomName: string;
+    };
 
 // Survive HMR in dev: reuse a single emitter + presence registry across reloads.
 const globalForBus = globalThis as unknown as {

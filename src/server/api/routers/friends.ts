@@ -9,7 +9,12 @@ import {
 import { friendship, user } from "@/server/db/schema";
 import { usernameSchema } from "@/server/api/routers/me";
 import { getAcceptedFriendIds } from "@/server/friends";
-import { whichOnline } from "@/server/realtime";
+import { publishToUser, whichOnline } from "@/server/realtime";
+
+/** Tell a user their friend list/requests changed so their UI refetches. */
+function notifyFriendsChanged(...userIds: string[]): void {
+  for (const id of userIds) publishToUser(id, { type: "friends" });
+}
 
 /**
  * Public-safe shape of a user we expose to friends/requests.
@@ -85,6 +90,9 @@ export const friendsRouter = createTRPCRouter({
         addresseeId: input.userId,
         status: "pending",
       });
+
+      // Live-notify the addressee (new incoming request) and me (outgoing).
+      notifyFriendsChanged(input.userId, me);
     }),
 
   /** Incoming pending requests addressed to me. */
@@ -152,6 +160,9 @@ export const friendsRouter = createTRPCRouter({
           .delete(friendship)
           .where(eq(friendship.id, input.friendshipId));
       }
+
+      // Notify the original requester (their request was answered) and me.
+      notifyFriendsChanged(row.requesterId, me);
     }),
 
   /** IDs of my friends who are currently online (single-pod presence view). */
@@ -211,5 +222,7 @@ export const friendsRouter = createTRPCRouter({
             ),
           ),
         );
+
+      notifyFriendsChanged(input.userId, me);
     }),
 });

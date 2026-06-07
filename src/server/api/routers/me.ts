@@ -2,7 +2,11 @@ import { TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  publicProcedure,
+} from "@/server/api/trpc";
 import { user } from "@/server/db/schema";
 
 /** Allowed handle format: 3-20 chars, lowercase letters, digits, underscore. */
@@ -16,6 +20,16 @@ export const usernameSchema = z
   );
 
 export const meRouter = createTRPCRouter({
+  /** Check at sign-up whether a handle is free (and well-formed). */
+  isUsernameAvailable: publicProcedure
+    .input(z.object({ username: usernameSchema }))
+    .query(async ({ ctx, input }) => {
+      const taken = await ctx.db.query.user.findFirst({
+        where: eq(user.username, input.username),
+      });
+      return { available: !taken };
+    }),
+
   /** The signed-in user's own profile, including whether onboarding is done. */
   profile: protectedProcedure.query(async ({ ctx }) => {
     const [row] = await ctx.db

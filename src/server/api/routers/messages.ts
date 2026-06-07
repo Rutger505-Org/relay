@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, asc, eq, or } from "drizzle-orm";
+import { and, asc, count, eq, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -97,6 +97,38 @@ export const messagesRouter = createTRPCRouter({
       publishToUser(me, { type: "dm", message: created });
 
       return created;
+    }),
+
+  /** Unread message counts grouped by the friend who sent them. */
+  unreadCounts: protectedProcedure.query(async ({ ctx }) => {
+    const me = ctx.session.user.id;
+    const rows = await ctx.db
+      .select({
+        fromUserId: dmMessage.senderId,
+        count: count(),
+      })
+      .from(dmMessage)
+      .where(and(eq(dmMessage.recipientId, me), isNull(dmMessage.readAt)))
+      .groupBy(dmMessage.senderId);
+
+    return rows;
+  }),
+
+  /** Mark every message from a given friend as read. */
+  markRead: protectedProcedure
+    .input(z.object({ withUserId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const me = ctx.session.user.id;
+      await ctx.db
+        .update(dmMessage)
+        .set({ readAt: new Date() })
+        .where(
+          and(
+            eq(dmMessage.recipientId, me),
+            eq(dmMessage.senderId, input.withUserId),
+            isNull(dmMessage.readAt),
+          ),
+        );
     }),
 
   /** Notify a friend that I am (or stopped) typing. Fire-and-forget. */
