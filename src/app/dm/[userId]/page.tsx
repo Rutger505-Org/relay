@@ -19,21 +19,68 @@ export default function DmPage() {
     if (!sessionPending && !session) router.push("/sign-in");
   }, [session, sessionPending, router]);
 
+  const myId = session?.user.id;
   const utils = api.useUtils();
   const conversation = api.messages.conversation.useQuery(
     { withUserId: otherUserId },
-    { enabled: !!session, refetchInterval: 2000 },
+    { enabled: !!session },
   );
 
   const [body, setBody] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Realtime: subscribe to the server-relayed event stream and append any DM
+  // belonging to this conversation straight into the query cache. No polling.
+  useEffect(() => {
+    if (!session) return;
+
+    const source = new EventSource("/api/stream");
+
+    source.onmessage = (e) => {
+      const event = JSON.parse(e.data as string) as {
+        type: string;
+        message: {
+          id: number;
+          senderId: string;
+          recipientId: string;
+          body: string;
+          createdAt: string;
+          readAt: string | null;
+        };
+      };
+      if (event.type !== "dm") return;
+
+      const m = event.message;
+      const inThisChat =
+        (m.senderId === myId && m.recipientId === otherUserId) ||
+        (m.senderId === otherUserId && m.recipientId === myId);
+      if (!inThisChat) return;
+
+      utils.messages.conversation.setData(
+        { withUserId: otherUserId },
+        (prev) => {
+          if (!prev) return prev;
+          if (prev.some((existing) => existing.id === m.id)) return prev;
+          return [
+            ...prev,
+            {
+              ...m,
+              createdAt: new Date(m.createdAt),
+              readAt: m.readAt ? new Date(m.readAt) : null,
+            },
+          ];
+        },
+      );
+    };
+
+    return () => source.close();
+  }, [session, myId, otherUserId, utils]);
+
   const send = api.messages.send.useMutation({
-    onSuccess: async () => {
+    onSuccess: () => {
+      // The sent message arrives back over the event stream (the server
+      // publishes to the sender too), so just clear the input here.
       setBody("");
-      await utils.messages.conversation.invalidate({
-        withUserId: otherUserId,
-      });
     },
   });
 
@@ -48,8 +95,6 @@ export default function DmPage() {
       </div>
     );
   }
-
-  const myId = session.user.id;
 
   return (
     <div className="mx-auto flex h-screen max-w-2xl flex-col p-4">

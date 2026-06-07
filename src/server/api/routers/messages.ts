@@ -7,7 +7,8 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import { dmMessage, friendship } from "@/server/db/schema";
-import { db } from "@/server/db";
+import type { db } from "@/server/db";
+import { publishToUser } from "@/server/realtime";
 
 /** Throw unless `me` and `other` are accepted friends. */
 async function assertFriends(
@@ -89,6 +90,11 @@ export const messagesRouter = createTRPCRouter({
           body: input.body,
         })
         .returning();
+
+      // Push to the recipient (live delivery) and back to the sender so their
+      // other open tabs/devices stay in sync. Both go through the server.
+      publishToUser(input.toUserId, { type: "dm", message: created });
+      publishToUser(me, { type: "dm", message: created });
 
       return created;
     }),
