@@ -2,7 +2,6 @@ import { env } from "@/env";
 import { db } from "@/server/db";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { magicLink } from "better-auth/plugins";
 import nodemailer from "nodemailer";
 
 const transporter = nodemailer.createTransport({
@@ -21,25 +20,21 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
+    minPasswordLength: 8,
+    // Password-reset flow: emails a link back to /reset-password?token=...
+    sendResetPassword: async ({ user, url }) => {
+      const result = await transporter.sendMail({
+        to: user.email,
+        from: env.AUTH_EMAIL_FROM,
+        subject: "Reset your Relay password",
+        text: `Reset your password: ${url}\nIf you didn't request this, you can ignore this email. The link expires in 1 hour.`,
+        html: `<p>Reset your password: <a href="${url}">${url}</a></p><p>If you didn't request this, you can ignore this email. The link expires in 1 hour.</p>`,
+      });
+
+      if (result.rejected.length || !result.messageId) {
+        console.error("Password reset email send failed", result);
+        throw new Error("Failed to send email");
+      }
+    },
   },
-  plugins: [
-    magicLink({
-      disableSignUp: true,
-
-      sendMagicLink: async ({ email, url }) => {
-        const result = await transporter.sendMail({
-          to: email,
-          from: env.AUTH_EMAIL_FROM,
-          subject: "Your sign-in link",
-          text: `Click to sign in: ${url}\nThis link expires in 6 minutes.`,
-          html: `<p>Click to sign in: <a href="${url}">${url}</a> this link expires in 6 minutes</p>`,
-        });
-
-        if (result.rejected.length || !result.messageId) {
-          console.error("Email send failed", result);
-          throw new Error("Failed to send email");
-        }
-      },
-    }),
-  ],
 });

@@ -154,3 +154,12 @@ yarn-error.log*
 
 # idea files
 .idea
+
+# terraform — local working dir + state, but keep the .lock.hcl committed
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+!*.tfvars.example
+.terraform.tfstate.lock.info

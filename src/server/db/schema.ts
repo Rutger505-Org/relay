@@ -138,6 +138,16 @@ export const dmMessage = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     body: text("body").notNull(),
+    // Message kind. Regular chat is "text"; "call" rows are call-log entries
+    // (started by sender, to recipient) rendered as a system line in the thread.
+    type: text("type", { enum: ["text", "call"] })
+      .notNull()
+      .default("text"),
+    // Only set for type === "call". Outcome of the call and its length.
+    callStatus: text("call_status", {
+      enum: ["completed", "missed", "declined", "canceled"],
+    }),
+    callDurationSec: int("call_duration_sec", { mode: "number" }),
     createdAt: int("created_at", { mode: "timestamp" })
       .default(sql`(unixepoch())`)
       .notNull(),

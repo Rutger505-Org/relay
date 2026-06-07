@@ -6,6 +6,35 @@ import { Input } from "@/components/ui/input";
 import { api } from "@/trpc/react";
 import { useEffect, useRef, useState } from "react";
 
+/** Format a call duration in seconds as "m:ss". */
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+/**
+ * Human label for a call-log entry, from the perspective of the viewer.
+ * `mine` is true when the viewer was the caller (the row's sender).
+ */
+function callLabel(
+  status: "completed" | "missed" | "declined" | "canceled" | null,
+  durationSec: number | null,
+  mine: boolean,
+): string {
+  switch (status) {
+    case "completed":
+      return `Voice call · ${formatDuration(durationSec ?? 0)}`;
+    case "declined":
+      return mine ? "Call declined" : "You declined the call";
+    case "missed":
+    case "canceled":
+      return mine ? "No answer" : "Missed call";
+    default:
+      return "Voice call";
+  }
+}
+
 /**
  * A single 1:1 conversation pane: message history, live delivery, typing
  * indicator, and (optionally) a call button rendered by the parent.
@@ -111,6 +140,20 @@ export function Conversation({
         )}
         {conversation.data?.map((m) => {
           const mine = m.senderId === myId;
+
+          // Call-log entries render as a centered system line, Discord-style.
+          if (m.type === "call") {
+            return (
+              <div
+                key={m.id}
+                className="my-1 flex items-center justify-center gap-2 self-center text-sm text-gray-500"
+              >
+                <span aria-hidden>{m.callStatus === "completed" ? "📞" : "📵"}</span>
+                <span>{callLabel(m.callStatus, m.callDurationSec, mine)}</span>
+              </div>
+            );
+          }
+
           return (
             <div
               key={m.id}
