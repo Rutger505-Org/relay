@@ -1,6 +1,11 @@
 "use client";
 
 import { useRealtimeEvent } from "@/app/_components/realtime";
+import {
+  Ringtone,
+  ensureNotificationPermission,
+  showIncomingCallNotification,
+} from "@/app/_components/ringtone";
 import { Button } from "@/components/ui/button";
 import { api } from "@/trpc/react";
 import { Room, RoomEvent, Track, type RemoteTrack } from "livekit-client";
@@ -41,6 +46,8 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const [muted, setMuted] = useState(false);
   const roomRef = useRef<Room | null>(null);
   const audioContainerRef = useRef<HTMLDivElement>(null);
+  const ringtoneRef = useRef<Ringtone | null>(null);
+  const notificationRef = useRef<Notification | null>(null);
 
   const friends = api.friends.list.useQuery();
   const handleFor = (id: string) =>
@@ -164,6 +171,37 @@ export function CallProvider({ children }: { children: ReactNode }) {
   }, [muted]);
 
   useEffect(() => () => teardownRoom(), [teardownRoom]);
+
+  // Ask for notification permission up front so we can alert on incoming calls
+  // even when the tab isn't focused.
+  useEffect(() => {
+    ensureNotificationPermission();
+  }, []);
+
+  // Ring (audible) + desktop notification while a call is incoming. Stops on
+  // any transition away from "incoming" (accepted, declined, cancelled).
+  const incomingPeerId = state.phase === "incoming" ? state.peerId : null;
+  useEffect(() => {
+    if (!incomingPeerId) return;
+
+    const ringtone = new Ringtone();
+    ringtoneRef.current = ringtone;
+    ringtone.start();
+    notificationRef.current = showIncomingCallNotification(
+      handleFor(incomingPeerId),
+    );
+
+    return () => {
+      ringtone.stop();
+      ringtoneRef.current = null;
+      notificationRef.current?.close();
+      notificationRef.current = null;
+    };
+    // handleFor is derived from the friends query; intentionally excluded so a
+    // background friends refetch doesn't restart the ring. The peer id is what
+    // matters for which call we're ringing for.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incomingPeerId]);
 
   return (
     <CallContext.Provider
