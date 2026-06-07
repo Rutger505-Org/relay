@@ -25,8 +25,11 @@ export default function DmPage() {
     { withUserId: otherUserId },
     { enabled: !!session },
   );
+  const friends = api.friends.list.useQuery(undefined, { enabled: !!session });
+  const otherHandle = friends.data?.find((f) => f.id === otherUserId)?.username;
 
   const [body, setBody] = useState("");
+  const [theyTyping, setTheyTyping] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Realtime: subscribe to the server-relayed event stream and append any DM
@@ -48,6 +51,14 @@ export default function DmPage() {
           readAt: string | null;
         };
       };
+      if (event.type === "typing") {
+        const t = event as unknown as {
+          fromUserId: string;
+          typing: boolean;
+        };
+        if (t.fromUserId === otherUserId) setTheyTyping(t.typing);
+        return;
+      }
       if (event.type !== "dm") return;
 
       const m = event.message;
@@ -84,6 +95,32 @@ export default function DmPage() {
     },
   });
 
+  // Typing indicator: tell the other side I'm typing, and auto-clear after a
+  // short pause so a stuck "typing..." never lingers.
+  const setTyping = api.messages.setTyping.useMutation();
+  const typingActiveRef = useRef(false);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const signalTyping = () => {
+    if (!typingActiveRef.current) {
+      typingActiveRef.current = true;
+      setTyping.mutate({ toUserId: otherUserId, typing: true });
+    }
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      typingActiveRef.current = false;
+      setTyping.mutate({ toUserId: otherUserId, typing: false });
+    }, 2500);
+  };
+
+  const stopTyping = () => {
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    if (typingActiveRef.current) {
+      typingActiveRef.current = false;
+      setTyping.mutate({ toUserId: otherUserId, typing: false });
+    }
+  };
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversation.data?.length]);
@@ -99,7 +136,14 @@ export default function DmPage() {
   return (
     <div className="mx-auto flex h-screen max-w-2xl flex-col p-4">
       <div className="flex items-center justify-between border-b pb-3">
-        <h1 className="text-xl font-semibold">Direct message</h1>
+        <div>
+          <h1 className="text-xl font-semibold">
+            {otherHandle ? `@${otherHandle}` : "Direct message"}
+          </h1>
+          <p className="h-4 text-xs text-gray-500">
+            {theyTyping ? "typing…" : ""}
+          </p>
+        </div>
         <Link
           href="/friends"
           className="text-sm text-blue-600 hover:underline"
@@ -138,13 +182,20 @@ export default function DmPage() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (body.trim()) send.mutate({ toUserId: otherUserId, body });
+          if (body.trim()) {
+            send.mutate({ toUserId: otherUserId, body });
+            stopTyping();
+          }
         }}
         className="flex gap-2 border-t pt-3"
       >
         <Input
           value={body}
-          onChange={(e) => setBody(e.target.value)}
+          onChange={(e) => {
+            setBody(e.target.value);
+            if (e.target.value) signalTyping();
+            else stopTyping();
+          }}
           placeholder="Type a message..."
           autoFocus
         />

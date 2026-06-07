@@ -1,7 +1,15 @@
 import { headers } from "next/headers";
 
 import { auth } from "@/server/auth";
-import { subscribeToUser, type RealtimeEvent } from "@/server/realtime";
+import { db } from "@/server/db";
+import { getAcceptedFriendIds } from "@/server/friends";
+import {
+  addConnection,
+  publishToUser,
+  removeConnection,
+  subscribeToUser,
+  type RealtimeEvent,
+} from "@/server/realtime";
 
 // SSE must stream; never statically optimize or cache.
 export const dynamic = "force-dynamic";
@@ -26,6 +34,15 @@ export async function GET(request: Request): Promise<Response> {
   const userId = session.user.id;
   const encoder = new TextEncoder();
 
+  // Tell friends this user came online (only on their first connection).
+  const justCameOnline = addConnection(userId);
+  if (justCameOnline) {
+    const friendIds = await getAcceptedFriendIds(db, userId);
+    for (const friendId of friendIds) {
+      publishToUser(friendId, { type: "presence", userId, online: true });
+    }
+  }
+
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       const send = (event: RealtimeEvent) => {
@@ -47,6 +64,18 @@ export async function GET(request: Request): Promise<Response> {
       const close = () => {
         clearInterval(heartbeat);
         unsubscribe();
+        // Broadcast offline when this was the user's last open connection.
+        if (removeConnection(userId)) {
+          void getAcceptedFriendIds(db, userId).then((friendIds) => {
+            for (const friendId of friendIds) {
+              publishToUser(friendId, {
+                type: "presence",
+                userId,
+                online: false,
+              });
+            }
+          });
+        }
         try {
           controller.close();
         } catch {

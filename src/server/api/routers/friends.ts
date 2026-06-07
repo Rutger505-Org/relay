@@ -7,24 +7,30 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import { friendship, user } from "@/server/db/schema";
+import { usernameSchema } from "@/server/api/routers/me";
+import { getAcceptedFriendIds } from "@/server/friends";
+import { whichOnline } from "@/server/realtime";
 
-/** Public-safe shape of a user we expose to friends/requests. */
+/**
+ * Public-safe shape of a user we expose to friends/requests.
+ * NOTE: never include `email` here — handles are the only public identifier.
+ */
 const publicUserColumns = {
   id: user.id,
   name: user.name,
-  email: user.email,
+  username: user.username,
   image: user.image,
 };
 
 export const friendsRouter = createTRPCRouter({
-  /** Find a user by exact email so you can send them a request. */
+  /** Find a user by exact handle so you can send them a request. */
   search: protectedProcedure
-    .input(z.object({ email: z.string().email() }))
+    .input(z.object({ username: usernameSchema }))
     .query(async ({ ctx, input }) => {
       const [found] = await ctx.db
         .select(publicUserColumns)
         .from(user)
-        .where(eq(user.email, input.email.toLowerCase()))
+        .where(eq(user.username, input.username))
         .limit(1);
 
       if (!found || found.id === ctx.session.user.id) return null;
@@ -147,6 +153,12 @@ export const friendsRouter = createTRPCRouter({
           .where(eq(friendship.id, input.friendshipId));
       }
     }),
+
+  /** IDs of my friends who are currently online (single-pod presence view). */
+  presence: protectedProcedure.query(async ({ ctx }) => {
+    const friendIds = await getAcceptedFriendIds(ctx.db, ctx.session.user.id);
+    return whichOnline(friendIds);
+  }),
 
   /** List my accepted friends. */
   list: protectedProcedure.query(async ({ ctx }) => {

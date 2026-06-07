@@ -98,4 +98,23 @@ export const messagesRouter = createTRPCRouter({
 
       return created;
     }),
+
+  /** Notify a friend that I am (or stopped) typing. Fire-and-forget. */
+  setTyping: protectedProcedure
+    .input(
+      z.object({
+        toUserId: z.string().min(1),
+        typing: z.boolean(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const me = ctx.session.user.id;
+      await assertFriends(ctx.db, me, input.toUserId);
+
+      publishToUser(input.toUserId, {
+        type: "typing",
+        fromUserId: me,
+        typing: input.typing,
+      });
+    }),
 });

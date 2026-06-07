@@ -13,7 +13,19 @@ import { Label } from "@/components/ui/label";
 import { api } from "@/trpc/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+/** Small green/grey dot indicating online state. */
+function PresenceDot({ online }: { online: boolean }) {
+  return (
+    <span
+      className={`inline-block h-2.5 w-2.5 rounded-full ${
+        online ? "bg-green-500" : "bg-gray-300"
+      }`}
+      title={online ? "Online" : "Offline"}
+    />
+  );
+}
 
 export default function FriendsPage() {
   const { data: session, isPending: sessionPending } = useSession();
@@ -31,8 +43,37 @@ export default function FriendsPage() {
   const outgoing = api.friends.outgoing.useQuery(undefined, {
     enabled: !!session,
   });
+  const presence = api.friends.presence.useQuery(undefined, {
+    enabled: !!session,
+  });
 
-  const [email, setEmail] = useState("");
+  // Live presence: seed from the query, then patch on SSE presence events.
+  const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (presence.data) setOnlineIds(new Set(presence.data));
+  }, [presence.data]);
+
+  useEffect(() => {
+    if (!session) return;
+    const source = new EventSource("/api/stream");
+    source.onmessage = (e) => {
+      const event = JSON.parse(e.data as string) as {
+        type: string;
+        userId?: string;
+        online?: boolean;
+      };
+      if (event.type !== "presence" || !event.userId) return;
+      setOnlineIds((prev) => {
+        const next = new Set(prev);
+        if (event.online) next.add(event.userId!);
+        else next.delete(event.userId!);
+        return next;
+      });
+    };
+    return () => source.close();
+  }, [session]);
+
+  const [handle, setHandle] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
 
   const refreshAll = async () => {
@@ -40,34 +81,44 @@ export default function FriendsPage() {
       utils.friends.list.invalidate(),
       utils.friends.incoming.invalidate(),
       utils.friends.outgoing.invalidate(),
+      utils.friends.presence.invalidate(),
     ]);
   };
 
   const sendRequest = api.friends.sendRequest.useMutation({
     onSuccess: async () => {
       setNotice("Friend request sent.");
-      setEmail("");
+      setHandle("");
       await refreshAll();
     },
     onError: (e) => setNotice(e.message),
   });
 
-  const respond = api.friends.respond.useMutation({
-    onSuccess: refreshAll,
-  });
+  const respond = api.friends.respond.useMutation({ onSuccess: refreshAll });
   const remove = api.friends.remove.useMutation({ onSuccess: refreshAll });
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     setNotice(null);
-    // Look up the user by email, then send the request.
-    const found = await utils.friends.search.fetch({ email });
+    // Look up the user by handle, then send the request.
+    const found = await utils.friends.search.fetch({ username: handle });
     if (!found) {
-      setNotice("No user found with that email.");
+      setNotice("No user found with that handle.");
       return;
     }
     sendRequest.mutate({ userId: found.id });
   };
+
+  const sortedFriends = useMemo(() => {
+    if (!friends.data) return [];
+    // Online friends first, then by handle.
+    return [...friends.data].sort((a, b) => {
+      const ao = onlineIds.has(a.id) ? 0 : 1;
+      const bo = onlineIds.has(b.id) ? 0 : 1;
+      if (ao !== bo) return ao - bo;
+      return (a.username ?? "").localeCompare(b.username ?? "");
+    });
+  }, [friends.data, onlineIds]);
 
   if (sessionPending || !session) {
     return (
@@ -92,14 +143,14 @@ export default function FriendsPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleAdd} className="flex flex-col gap-3">
-            <Label htmlFor="email">Their email</Label>
+            <Label htmlFor="handle">Their handle</Label>
             <div className="flex gap-2">
               <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="friend@example.com"
+                id="handle"
+                value={handle}
+                onChange={(e) => setHandle(e.target.value)}
+                placeholder="e.g. coolcat_99"
+                autoComplete="off"
                 required
               />
               <Button type="submit" disabled={sendRequest.isPending}>
@@ -122,7 +173,7 @@ export default function FriendsPage() {
                 key={r.id}
                 className="flex items-center justify-between gap-2"
               >
-                <span>{r.requester.name || r.requester.email}</span>
+                <span>@{r.requester.username}</span>
                 <div className="flex gap-2">
                   <Button
                     onClick={() =>
@@ -154,7 +205,7 @@ export default function FriendsPage() {
           <CardContent className="flex flex-col gap-2">
             {outgoing.data.map((r) => (
               <div key={r.id} className="text-sm text-gray-600">
-                {r.addressee.name || r.addressee.email} — pending
+                @{r.addressee.username} — pending
               </div>
             ))}
           </CardContent>
@@ -167,12 +218,14 @@ export default function FriendsPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {friends.isPending && <p>Loading...</p>}
-          {!friends.isPending && !friends.data?.length && (
+          {!friends.isPending && !sortedFriends.length && (
             <p className="text-sm text-gray-600">No friends yet.</p>
           )}
-          {friends.data?.map((f) => (
+          {sortedFriends.map((f) => (
             <div key={f.id} className="flex items-center justify-between gap-2">
-              <span>{f.name || f.email}</span>
+              <span className="flex items-center gap-2">
+                <PresenceDot online={onlineIds.has(f.id)} />@{f.username}
+              </span>
               <div className="flex gap-2">
                 <Link href={`/dm/${f.id}`}>
                   <Button>Message</Button>

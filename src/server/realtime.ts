@@ -12,14 +12,15 @@ import type { dmMessage } from "@/server/db/schema";
  * (e.g. Redis) so events fan out across pods.
  */
 
-export type RealtimeEvent = {
-  type: "dm";
-  message: typeof dmMessage.$inferSelect;
-};
+export type RealtimeEvent =
+  | { type: "dm"; message: typeof dmMessage.$inferSelect }
+  | { type: "typing"; fromUserId: string; typing: boolean }
+  | { type: "presence"; userId: string; online: boolean };
 
-// Survive HMR in dev: reuse a single emitter across module reloads.
+// Survive HMR in dev: reuse a single emitter + presence registry across reloads.
 const globalForBus = globalThis as unknown as {
   realtimeBus?: EventEmitter;
+  realtimePresence?: Map<string, number>;
 };
 
 const bus =
@@ -31,8 +32,41 @@ const bus =
     return emitter;
   })();
 
+/** userId -> number of open SSE connections (a user may have several tabs). */
+const presence = globalForBus.realtimePresence ?? new Map<string, number>();
+
 if (process.env.NODE_ENV !== "production") {
   globalForBus.realtimeBus = bus;
+  globalForBus.realtimePresence = presence;
+}
+
+/**
+ * Register an open connection for a user. Returns `true` when this is their
+ * first connection (i.e. they just came online), so the caller can broadcast.
+ */
+export function addConnection(userId: string): boolean {
+  const next = (presence.get(userId) ?? 0) + 1;
+  presence.set(userId, next);
+  return next === 1;
+}
+
+/**
+ * Remove a connection for a user. Returns `true` when it was their last one
+ * (i.e. they just went offline).
+ */
+export function removeConnection(userId: string): boolean {
+  const next = (presence.get(userId) ?? 1) - 1;
+  if (next <= 0) {
+    presence.delete(userId);
+    return true;
+  }
+  presence.set(userId, next);
+  return false;
+}
+
+/** Filter `userIds` down to the ones currently online (single-pod view). */
+export function whichOnline(userIds: string[]): string[] {
+  return userIds.filter((id) => (presence.get(id) ?? 0) > 0);
 }
 
 /** Channel name for a given user's events. */
