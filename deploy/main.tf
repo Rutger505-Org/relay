@@ -133,7 +133,7 @@ resource "kubernetes_deployment" "livekit" {
 
         container {
           name  = "livekit"
-          image = "livekit/livekit-server:v1.8.4"
+          image = "livekit/livekit-server:v1.12.0"
           args  = ["--config", "/etc/livekit/config.yaml"]
 
           resources {
