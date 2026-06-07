@@ -1,6 +1,7 @@
 "use client";
 
 import { useSession } from "@/client/auth";
+import { useCall } from "@/app/_components/call";
 import { Conversation } from "@/app/_components/conversation";
 import { useRealtimeEvent } from "@/app/_components/realtime";
 import { SignOutButton } from "@/app/_components/sign-out-button";
@@ -36,6 +37,7 @@ export function AppShell() {
 
   const myId = session?.user.id;
   const utils = api.useUtils();
+  const { startCall, state: callState } = useCall();
 
   const profile = api.me.profile.useQuery(undefined, { enabled: !!session });
   const friends = api.friends.list.useQuery(undefined, { enabled: !!session });
@@ -242,6 +244,16 @@ export function AppShell() {
             myId={myId}
             otherUserId={selectedFriend.id}
             otherHandle={selectedFriend.username}
+            headerRight={
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={callState.phase !== "idle"}
+                onClick={() => void startCall(selectedFriend.id)}
+              >
+                📞 Call
+              </Button>
+            }
           />
         ) : (
           <div className="flex h-full items-center justify-center text-gray-500">
