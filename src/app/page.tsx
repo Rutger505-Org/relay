@@ -14,17 +14,26 @@ export default async function Home() {
     <div className="flex min-h-screen flex-col items-center justify-center">
       <main className={"flex flex-col items-center justify-center gap-10"}>
         <div className={"flex flex-col items-center space-y-2.5"}>
-          <h1 className="text-4xl font-bold">Hi There!</h1>
+          <h1 className="text-4xl font-bold">Relay</h1>
           <h2 className={"text-1xl max-w-md text-center font-bold"}>
-            This is a demo blog app with database integration and discord
-            messages for showing usage of these tools
+            Server-relayed chat &amp; calls. Add friends, DM them, call them —
+            all traffic through the server.
           </h2>
         </div>
         <div className={"flex flex-col items-center space-y-2.5"}>
-          <span className={"text-center"}>
-            Session: {session ? JSON.stringify(session) : "No session"}
-          </span>
-          {session ? <SignOutButton /> : <Link href={"sign-in"}>Sign In</Link>}
+          {session ? (
+            <div className="flex items-center gap-4">
+              <Link
+                href="/friends"
+                className="rounded-full bg-blue-600 px-6 py-2 font-semibold text-white transition hover:bg-blue-700"
+              >
+                Friends &amp; messages
+              </Link>
+              <SignOutButton />
+            </div>
+          ) : (
+            <Link href={"sign-in"}>Sign In</Link>
+          )}
         </div>
 
         <div className={"flex flex-col gap-7"}>
