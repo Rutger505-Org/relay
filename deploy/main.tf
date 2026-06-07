@@ -62,6 +62,15 @@ resource "kubernetes_deployment" "app" {
         labels = {
           app = "${var.application_name}-deployment"
         }
+
+        # Force a rolling restart of the pod on every deployment. Without this,
+        # changes that don't alter the pod spec (e.g. an updated Secret/ConfigMap
+        # value) won't trigger a new rollout, so the pod keeps running with the
+        # old env. timestamp() changes on every apply, which updates the pod
+        # template and forces a restart.
+        annotations = {
+          "deployment/restarted-at" = timestamp()
+        }
       }
 
       spec {
