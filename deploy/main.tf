@@ -63,13 +63,16 @@ resource "kubernetes_deployment" "app" {
           app = "${var.application_name}-deployment"
         }
 
-        # Force a rolling restart of the pod on every deployment. Without this,
-        # changes that don't alter the pod spec (e.g. an updated Secret/ConfigMap
-        # value) won't trigger a new rollout, so the pod keeps running with the
-        # old env. timestamp() changes on every apply, which updates the pod
-        # template and forces a restart.
+        # Force a rolling restart of the pod when secrets or config change.
+        # Updating only a Secret/ConfigMap value (e.g. AUTH_SECRET) doesn't alter
+        # the pod spec, so the Deployment won't roll out and the pod keeps running
+        # with the old env. Hashing the values into a template annotation changes
+        # the pod template whenever they do, which forces a restart.
+        # (timestamp() can't be used here: it differs between plan and apply,
+        # which makes the kubernetes provider error with an inconsistent plan.)
         annotations = {
-          "deployment/restarted-at" = timestamp()
+          "deployment/secrets-hash" = sha1(jsonencode(var.secrets))
+          "deployment/config-hash"  = sha1(jsonencode(var.config))
         }
       }
 
