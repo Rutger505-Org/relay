@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { api } from "@/trpc/react";
 import { useMutation } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -13,21 +14,38 @@ import React, { useEffect, useState } from "react";
 export default function SignUpPage() {
   const { data: session } = useSession();
   const router = useRouter();
+  const utils = api.useUtils();
+  const setUsername = api.me.setUsername.useMutation();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [username, setUsernameValue] = useState("");
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const response = await signUp.email({
-        email,
-        name,
-        password,
+      const handle = username.trim().toLowerCase();
+      if (!/^[a-z0-9_]{3,20}$/.test(handle)) {
+        throw new Error(
+          "Handle must be 3-20 characters: lowercase letters, numbers or underscore.",
+        );
+      }
+
+      // Reject taken handles before creating the account.
+      const { available } = await utils.me.isUsernameAvailable.fetch({
+        username: handle,
       });
+      if (!available) {
+        throw new Error("That handle is already taken.");
+      }
+
+      const response = await signUp.email({ email, name, password });
       if (response.error) {
         throw new Error(response.error.message ?? "Sign up failed");
       }
+
+      // Better Auth signs the user in on sign-up, so we can claim the handle.
+      await setUsername.mutateAsync({ username: handle });
 
       router.push("/");
     },
@@ -63,6 +81,23 @@ export default function SignUpPage() {
                 placeholder="Your name"
               />
             </div>
+            <div>
+              <Label htmlFor="username">Handle</Label>
+              <Input
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsernameValue(e.target.value)}
+                required
+                autoComplete="off"
+                placeholder="e.g. coolcat_99"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                How friends add you. 3–20 chars: lowercase letters, numbers or
+                underscore. Your email stays private.
+              </p>
+            </div>
+
             <div>
               <Label htmlFor="email">Email</Label>
               <Input

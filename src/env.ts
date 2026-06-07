@@ -17,6 +17,13 @@ export const env = createEnv({
     AUTH_EMAIL_PORT: z.coerce.number(),
     AUTH_EMAIL_USER: z.string(),
     AUTH_EMAIL_PASSWORD: z.string(),
+
+    // LiveKit (self-hosted SFU) for 1:1 voice calls. Optional so the app runs
+    // before voice is configured; the call API errors clearly if unset.
+    // LIVEKIT_URL is the public wss:// signaling URL clients connect to.
+    LIVEKIT_URL: z.string().optional(),
+    LIVEKIT_API_KEY: z.string().optional(),
+    LIVEKIT_API_SECRET: z.string().optional(),
   },
   // Prefixed with NEXT_PUBLIC_
   client: {},

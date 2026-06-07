@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, asc, eq, or } from "drizzle-orm";
+import { and, asc, count, eq, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -7,7 +7,8 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import { dmMessage, friendship } from "@/server/db/schema";
-import { db } from "@/server/db";
+import type { db } from "@/server/db";
+import { publishToUser } from "@/server/realtime";
 
 /** Throw unless `me` and `other` are accepted friends. */
 async function assertFriends(
@@ -90,6 +91,62 @@ export const messagesRouter = createTRPCRouter({
         })
         .returning();
 
+      // Push to the recipient (live delivery) and back to the sender so their
+      // other open tabs/devices stay in sync. Both go through the server.
+      publishToUser(input.toUserId, { type: "dm", message: created });
+      publishToUser(me, { type: "dm", message: created });
+
       return created;
+    }),
+
+  /** Unread message counts grouped by the friend who sent them. */
+  unreadCounts: protectedProcedure.query(async ({ ctx }) => {
+    const me = ctx.session.user.id;
+    const rows = await ctx.db
+      .select({
+        fromUserId: dmMessage.senderId,
+        count: count(),
+      })
+      .from(dmMessage)
+      .where(and(eq(dmMessage.recipientId, me), isNull(dmMessage.readAt)))
+      .groupBy(dmMessage.senderId);
+
+    return rows;
+  }),
+
+  /** Mark every message from a given friend as read. */
+  markRead: protectedProcedure
+    .input(z.object({ withUserId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const me = ctx.session.user.id;
+      await ctx.db
+        .update(dmMessage)
+        .set({ readAt: new Date() })
+        .where(
+          and(
+            eq(dmMessage.recipientId, me),
+            eq(dmMessage.senderId, input.withUserId),
+            isNull(dmMessage.readAt),
+          ),
+        );
+    }),
+
+  /** Notify a friend that I am (or stopped) typing. Fire-and-forget. */
+  setTyping: protectedProcedure
+    .input(
+      z.object({
+        toUserId: z.string().min(1),
+        typing: z.boolean(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const me = ctx.session.user.id;
+      await assertFriends(ctx.db, me, input.toUserId);
+
+      publishToUser(input.toUserId, {
+        type: "typing",
+        fromUserId: me,
+        typing: input.typing,
+      });
     }),
 });
