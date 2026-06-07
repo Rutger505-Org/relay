@@ -1,5 +1,6 @@
 "use client";
 
+import { Avatar } from "@/app/_components/avatar";
 import { useRealtimeEvent } from "@/app/_components/realtime";
 import {
   Ringtone,
@@ -9,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { api } from "@/trpc/react";
 import { Room, RoomEvent, Track, type RemoteTrack } from "livekit-client";
+import { Mic, MicOff, Phone, PhoneOff } from "lucide-react";
 import {
   createContext,
   useCallback,
@@ -210,54 +212,73 @@ export function CallProvider({ children }: { children: ReactNode }) {
       {children}
       <div ref={audioContainerRef} className="hidden" />
       {state.phase !== "idle" && (
-        <div className="fixed bottom-4 right-4 z-50 w-72 rounded-2xl border bg-white p-4 shadow-lg">
-          {state.phase === "incoming" && (
-            <>
-              <p className="font-semibold">Incoming call</p>
-              <p className="text-sm text-gray-600">
-                @{handleFor(state.peerId)} is calling…
-              </p>
-              <div className="mt-3 flex gap-2">
-                <Button className="flex-1" onClick={() => void acceptCall()}>
-                  Accept
+        <div className="fixed bottom-4 right-4 z-50 w-80 rounded-2xl border border-black/30 bg-[#2b2d31] p-5 text-[#dbdee1] shadow-2xl">
+          <div className="flex flex-col items-center text-center">
+            <Avatar handle={handleFor(state.peerId)} size="lg" />
+            <p className="mt-3 text-lg font-bold text-white">
+              @{handleFor(state.peerId)}
+            </p>
+            <p className="text-sm text-zinc-400">
+              {state.phase === "incoming"
+                ? "Incoming call…"
+                : state.phase === "outgoing"
+                  ? "Calling…"
+                  : "Voice connected"}
+            </p>
+
+            {state.phase === "outgoing" && (
+              <span className="mt-2 flex gap-1">
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-indigo-400 [animation-delay:-0.3s]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-indigo-400 [animation-delay:-0.15s]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-indigo-400" />
+              </span>
+            )}
+          </div>
+
+          <div className="mt-5 flex gap-2">
+            {state.phase === "incoming" && (
+              <>
+                <Button
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-500"
+                  onClick={() => void acceptCall()}
+                >
+                  <Phone size={16} /> Accept
                 </Button>
                 <Button
-                  className="flex-1"
-                  variant="outline"
+                  className="flex-1 bg-rose-600 hover:bg-rose-500"
                   onClick={declineCall}
                 >
-                  Decline
+                  <PhoneOff size={16} /> Decline
                 </Button>
-              </div>
-            </>
-          )}
-          {state.phase === "outgoing" && (
-            <>
-              <p className="font-semibold">Calling @{handleFor(state.peerId)}…</p>
-              <Button className="mt-3 w-full" variant="outline" onClick={hangUp}>
-                Cancel
+              </>
+            )}
+            {state.phase === "outgoing" && (
+              <Button
+                className="w-full bg-rose-600 hover:bg-rose-500"
+                onClick={hangUp}
+              >
+                <PhoneOff size={16} /> Cancel
               </Button>
-            </>
-          )}
-          {state.phase === "connected" && (
-            <>
-              <p className="font-semibold">
-                In call with @{handleFor(state.peerId)}
-              </p>
-              <div className="mt-3 flex gap-2">
+            )}
+            {state.phase === "connected" && (
+              <>
                 <Button
+                  variant="secondary"
                   className="flex-1"
-                  variant="outline"
                   onClick={toggleMute}
                 >
+                  {muted ? <MicOff size={16} /> : <Mic size={16} />}
                   {muted ? "Unmute" : "Mute"}
                 </Button>
-                <Button className="flex-1" onClick={hangUp}>
-                  Hang up
+                <Button
+                  className="flex-1 bg-rose-600 hover:bg-rose-500"
+                  onClick={hangUp}
+                >
+                  <PhoneOff size={16} /> Hang up
                 </Button>
-              </div>
-            </>
-          )}
+              </>
+            )}
+          </div>
         </div>
       )}
     </CallContext.Provider>

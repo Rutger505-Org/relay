@@ -21,6 +21,9 @@ export type ClientRealtimeEvent =
         senderId: string;
         recipientId: string;
         body: string;
+        type: "text" | "call";
+        callStatus: "completed" | "missed" | "declined" | "canceled" | null;
+        callDurationSec: number | null;
         createdAt: string;
         readAt: string | null;
       };

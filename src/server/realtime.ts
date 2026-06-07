@@ -28,10 +28,24 @@ export type RealtimeEvent =
       roomName: string;
     };
 
+/**
+ * Live state of an in-flight call, keyed by room name. Used to derive the
+ * call-log outcome (missed/declined/completed) and duration when the call ends,
+ * since the individual tRPC mutations are otherwise stateless. Single-pod, like
+ * presence — moves to shared storage alongside the bus when scaling out.
+ */
+export type ActiveCall = {
+  callerId: string;
+  calleeId: string;
+  ringAt: number;
+  connectedAt?: number;
+};
+
 // Survive HMR in dev: reuse a single emitter + presence registry across reloads.
 const globalForBus = globalThis as unknown as {
   realtimeBus?: EventEmitter;
   realtimePresence?: Map<string, number>;
+  realtimeCalls?: Map<string, ActiveCall>;
 };
 
 const bus =
@@ -46,9 +60,35 @@ const bus =
 /** userId -> number of open SSE connections (a user may have several tabs). */
 const presence = globalForBus.realtimePresence ?? new Map<string, number>();
 
+/** roomName -> in-flight call state. */
+const calls = globalForBus.realtimeCalls ?? new Map<string, ActiveCall>();
+
 if (process.env.NODE_ENV !== "production") {
   globalForBus.realtimeBus = bus;
   globalForBus.realtimePresence = presence;
+  globalForBus.realtimeCalls = calls;
+}
+
+/** Record a newly-ringing call. Overwrites any stale entry for the room. */
+export function beginCall(
+  roomName: string,
+  callerId: string,
+  calleeId: string,
+): void {
+  calls.set(roomName, { callerId, calleeId, ringAt: Date.now() });
+}
+
+/** Mark a ringing call as answered (sets the connect timestamp once). */
+export function markCallConnected(roomName: string): void {
+  const call = calls.get(roomName);
+  if (call && !call.connectedAt) call.connectedAt = Date.now();
+}
+
+/** Remove and return a call's state, so the ender can log it exactly once. */
+export function endCall(roomName: string): ActiveCall | undefined {
+  const call = calls.get(roomName);
+  if (call) calls.delete(roomName);
+  return call;
 }
 
 /**

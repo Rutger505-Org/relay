@@ -43,6 +43,13 @@
       "when": 1780850231001,
       "tag": "0005_sleepy_mole_man",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1780873630675,
+      "tag": "0006_smart_sir_ram",
+      "breakpoints": true
     }
   ]
 }

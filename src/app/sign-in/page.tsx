@@ -1,73 +1,156 @@
 "use client";
 
-import { signIn, useSession } from "@/client/auth";
+import { signIn, signUp, useSession } from "@/client/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { api } from "@/trpc/react";
 import { useMutation } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React, { useEffect, useState } from "react";
 
-export default function SignInPage() {
+type Mode = "signin" | "signup";
+
+/**
+ * Single entry point for authentication: sign in and sign up live on the same
+ * page, toggled between two clearly-titled tabs. Auth is email + password only
+ * (magic links were removed); a separate page handles password resets.
+ */
+export default function AuthPage() {
   const { data: session } = useSession();
   const router = useRouter();
+  const utils = api.useUtils();
+  const setUsername = api.me.setUsername.useMutation();
 
+  const [mode, setMode] = useState<Mode>("signin");
+  const [name, setName] = useState("");
+  const [username, setUsername_] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [magicEmail, setMagicEmail] = useState("");
 
-  const mutation = useMutation({
+  const signInMut = useMutation({
     mutationFn: async () => {
-      const response = await signIn.email({
+      const res = await signIn.email({
         email,
         password,
         rememberMe: true,
         callbackURL: "/",
       });
-      if (response?.error) {
-        throw new Error(response.error.message ?? response.error.statusText);
+      if (res?.error) {
+        throw new Error(res.error.message ?? res.error.statusText);
       }
     },
   });
 
-  const magicMutation = useMutation({
+  const signUpMut = useMutation({
     mutationFn: async () => {
-      const response = await signIn.magicLink({
-        email: magicEmail,
-        callbackURL: "/",
-      });
-      if (response?.error) {
-        throw new Error(response.error.message ?? response.error.statusText);
+      const handle = username.trim().toLowerCase();
+      if (!/^[a-z0-9_]{3,20}$/.test(handle)) {
+        throw new Error(
+          "Handle must be 3-20 characters: lowercase letters, numbers or underscore.",
+        );
       }
+
+      // Reject taken handles before creating the account.
+      const { available } = await utils.me.isUsernameAvailable.fetch({
+        username: handle,
+      });
+      if (!available) throw new Error("That handle is already taken.");
+
+      const res = await signUp.email({ email, name, password });
+      if (res.error) throw new Error(res.error.message ?? "Sign up failed");
+
+      // Better Auth signs the user in on sign-up, so we can claim the handle.
+      await setUsername.mutateAsync({ username: handle });
+      router.push("/");
     },
   });
 
   useEffect(() => {
-    if (session) {
-      router.push("/");
-    }
+    if (session) router.push("/");
   }, [router, session]);
+
+  const active = mode === "signin" ? signInMut : signUpMut;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    mutation.mutate();
-  }
-
-  function handleMagicSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    magicMutation.mutate();
+    if (mode === "signin") signInMut.mutate();
+    else signUpMut.mutate();
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <Card className="w-full max-w-md">
+    <div className="flex min-h-screen items-center justify-center bg-[#1e1f22] p-4">
+      <Card className="w-full max-w-md border-black/30 shadow-2xl">
         <CardHeader>
-          <CardTitle>Sign in</CardTitle>
+          <div className="mb-2 flex items-center justify-center gap-2">
+            <span className="text-2xl">🛰️</span>
+            <span className="text-xl font-bold tracking-tight">Relay</span>
+          </div>
+          {/* Tabs make it unmistakable which action you're taking. */}
+          <div className="mb-2 grid grid-cols-2 gap-1 rounded-lg bg-[#1e1f22] p-1">
+            <button
+              type="button"
+              onClick={() => setMode("signin")}
+              className={`rounded-md py-2 text-sm font-medium transition ${
+                mode === "signin"
+                  ? "bg-indigo-600 text-white shadow"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Sign in
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("signup")}
+              className={`rounded-md py-2 text-sm font-medium transition ${
+                mode === "signup"
+                  ? "bg-indigo-600 text-white shadow"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Create account
+            </button>
+          </div>
+          <CardTitle className="text-center">
+            {mode === "signin" ? "Welcome back" : "Create your account"}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {mode === "signup" && (
+              <>
+                <div>
+                  <Label htmlFor="name">Name</Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    placeholder="Your name"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="username">Handle</Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername_(e.target.value)}
+                    required
+                    autoComplete="off"
+                    placeholder="e.g. coolcat_99"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    How friends add you. 3–20 chars: lowercase letters, numbers
+                    or underscore. Your email stays private.
+                  </p>
+                </div>
+              </>
+            )}
+
             <div>
               <Label htmlFor="email">Email</Label>
               <Input
@@ -81,71 +164,75 @@ export default function SignInPage() {
             </div>
 
             <div>
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                {mode === "signin" && (
+                  <Link
+                    href="/forgot-password"
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
+                )}
+              </div>
               <Input
                 id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                placeholder="Your password"
+                placeholder={
+                  mode === "signup" ? "At least 8 characters" : "Your password"
+                }
               />
             </div>
 
-            {mutation.isError && (
+            {active.isError && (
               <div className="text-sm text-red-600">
-                {mutation.error?.message ?? "Sign in failed"}
+                {active.error?.message ??
+                  (mode === "signin" ? "Sign in failed" : "Sign up failed")}
               </div>
             )}
 
             <Button
               type="submit"
-              disabled={mutation.isPending}
+              disabled={active.isPending}
               className="w-full"
             >
-              {mutation.isPending ? "Signing in..." : "Sign in"}
+              {active.isPending
+                ? mode === "signin"
+                  ? "Signing in..."
+                  : "Creating account..."
+                : mode === "signin"
+                  ? "Sign in"
+                  : "Create account"}
             </Button>
           </form>
-          <div className="my-8 border-t pt-8">
-            <h2 className="mb-4 text-center text-lg font-semibold">
-              Or sign in with a magic link
-            </h2>
-            <form onSubmit={handleMagicSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="magic-email">Email</Label>
-                <Input
-                  id="magic-email"
-                  type="email"
-                  value={magicEmail}
-                  onChange={(e) => setMagicEmail(e.target.value)}
-                  required
-                  placeholder="you@example.com"
-                />
-              </div>
-              {magicMutation.isError && (
-                <div className="text-sm text-red-600">
-                  {magicMutation.error?.message ?? "Failed to send magic link"}
-                </div>
-              )}
-              {magicMutation.isSuccess && (
-                <div className="text-sm text-green-600">
-                  Magic link sent! Check your email.
-                </div>
-              )}
-              <Button
-                type="submit"
-                disabled={magicMutation.isPending}
-                className="w-full"
-              >
-                {magicMutation.isPending ? "Sending..." : "Send magic link"}
-              </Button>
-            </form>
-          </div>
+
           <p className="mt-4 text-center text-sm text-gray-600">
-            Don’t have an account?{" "}
-            <Link href="/sign-up" className="text-blue-600 hover:underline">
-              Sign up
-            </Link>
+            {mode === "signin" ? (
+              <>
+                Don’t have an account?{" "}
+                <button
+                  type="button"
+                  onClick={() => setMode("signup")}
+                  className="text-blue-600 hover:underline"
+                >
+                  Create one
+                </button>
+              </>
+            ) : (
+              <>
+                Already have an account?{" "}
+                <button
+                  type="button"
+                  onClick={() => setMode("signin")}
+                  className="text-blue-600 hover:underline"
+                >
+                  Sign in
+                </button>
+              </>
+            )}
           </p>
         </CardContent>
       </Card>
