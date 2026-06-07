@@ -1,9 +1,10 @@
 "use client";
 
+import { Avatar } from "@/app/_components/avatar";
 import { useRealtimeEvent } from "@/app/_components/realtime";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/trpc/react";
+import { PhoneMissed, Phone, SendHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 /** Format a call duration in seconds as "m:ss". */
@@ -43,11 +44,13 @@ export function Conversation({
   myId,
   otherUserId,
   otherHandle,
+  online,
   headerRight,
 }: {
   myId: string;
   otherUserId: string;
   otherHandle: string;
+  online?: boolean;
   headerRight?: React.ReactNode;
 }) {
   const utils = api.useUtils();
@@ -124,56 +127,105 @@ export function Conversation({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversation.data?.length, theyTyping]);
 
+  const messages = conversation.data ?? [];
+
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <h2 className="text-lg font-semibold">@{otherHandle}</h2>
-        {headerRight}
+    <div className="flex h-full flex-col bg-[#313338]">
+      {/* Header */}
+      <div className="flex h-12 items-center gap-3 border-b border-black/20 px-4 shadow-sm">
+        <Avatar handle={otherHandle} size="sm" online={online} />
+        <div className="leading-tight">
+          <h2 className="text-sm font-bold text-white">@{otherHandle}</h2>
+          <p className="text-xs text-zinc-400">
+            {online ? "Online" : "Offline"}
+          </p>
+        </div>
+        <div className="ml-auto">{headerRight}</div>
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-4">
+      {/* Messages */}
+      <div className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-4 py-4">
         {conversation.isError && (
-          <p className="text-sm text-red-600">{conversation.error.message}</p>
+          <p className="text-sm text-rose-400">{conversation.error.message}</p>
         )}
-        {conversation.data?.length === 0 && (
-          <p className="text-sm text-gray-500">No messages yet. Say hi!</p>
+        {messages.length === 0 && !conversation.isError && (
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 text-zinc-500">
+            <Avatar handle={otherHandle} size="lg" />
+            <p className="mt-2 text-lg font-bold text-zinc-300">
+              @{otherHandle}
+            </p>
+            <p className="text-sm">
+              This is the beginning of your conversation. Say hi! 👋
+            </p>
+          </div>
         )}
-        {conversation.data?.map((m) => {
+
+        {messages.map((m, i) => {
           const mine = m.senderId === myId;
 
           // Call-log entries render as a centered system line, Discord-style.
           if (m.type === "call") {
+            const completed = m.callStatus === "completed";
             return (
               <div
                 key={m.id}
-                className="my-1 flex items-center justify-center gap-2 self-center text-sm text-gray-500"
+                className="my-2 flex items-center justify-center gap-2 text-xs font-medium text-zinc-500"
               >
-                <span aria-hidden>{m.callStatus === "completed" ? "📞" : "📵"}</span>
+                {completed ? (
+                  <Phone size={14} className="text-emerald-400" />
+                ) : (
+                  <PhoneMissed size={14} className="text-rose-400" />
+                )}
                 <span>{callLabel(m.callStatus, m.callDurationSec, mine)}</span>
               </div>
             );
           }
 
+          // Group consecutive text messages from the same sender.
+          const prev = messages[i - 1];
+          const grouped =
+            prev && prev.type === "text" && prev.senderId === m.senderId;
+
           return (
             <div
               key={m.id}
-              className={`max-w-[75%] rounded-2xl px-4 py-2 ${
-                mine
-                  ? "self-end bg-blue-600 text-white"
-                  : "self-start bg-gray-200 text-black"
-              }`}
+              className={`flex gap-3 px-2 ${grouped ? "mt-0.5" : "mt-3"} ${
+                grouped ? "py-0" : "py-0.5"
+              } rounded hover:bg-black/10`}
             >
-              {m.body}
+              <div className="w-10 shrink-0">
+                {!grouped && (
+                  <Avatar handle={mine ? "you" : otherHandle} size="md" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                {!grouped && (
+                  <p className="mb-0.5 text-sm font-semibold text-white">
+                    {mine ? "You" : `@${otherHandle}`}
+                  </p>
+                )}
+                <p className="whitespace-pre-wrap break-words text-sm text-[#dbdee1]">
+                  {m.body}
+                </p>
+              </div>
             </div>
           );
         })}
+
+        {theyTyping && (
+          <div className="flex items-center gap-2 px-2 py-1 text-xs text-zinc-400">
+            <span className="flex gap-1">
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.3s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.15s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-400" />
+            </span>
+            @{otherHandle} is typing…
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
 
-      <div className="h-5 px-4 text-xs text-gray-500">
-        {theyTyping ? `@${otherHandle} is typing…` : ""}
-      </div>
-
+      {/* Composer */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -182,21 +234,29 @@ export function Conversation({
             stopTyping();
           }
         }}
-        className="flex gap-2 border-t p-3"
+        className="flex items-center gap-2 px-4 pb-4"
       >
-        <Input
-          value={body}
-          onChange={(e) => {
-            setBody(e.target.value);
-            if (e.target.value) signalTyping();
-            else stopTyping();
-          }}
-          placeholder={`Message @${otherHandle}`}
-          autoFocus
-        />
-        <Button type="submit" disabled={send.isPending}>
-          Send
-        </Button>
+        <div className="flex flex-1 items-center gap-2 rounded-lg bg-[#383a40] px-3">
+          <Input
+            value={body}
+            onChange={(e) => {
+              setBody(e.target.value);
+              if (e.target.value) signalTyping();
+              else stopTyping();
+            }}
+            placeholder={`Message @${otherHandle}`}
+            autoFocus
+            className="h-11 border-none bg-transparent text-sm placeholder:text-zinc-500 focus-visible:ring-0"
+          />
+          <button
+            type="submit"
+            disabled={send.isPending || !body.trim()}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-indigo-400 transition-colors hover:text-indigo-300 disabled:text-zinc-600"
+            title="Send"
+          >
+            <SendHorizontal size={18} />
+          </button>
+        </div>
       </form>
     </div>
   );

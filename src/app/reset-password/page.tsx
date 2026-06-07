@@ -98,8 +98,8 @@ function ResetPasswordForm() {
 
 export default function ResetPasswordPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <Card className="w-full max-w-md">
+    <div className="flex min-h-screen items-center justify-center bg-[#1e1f22] p-4">
+      <Card className="w-full max-w-md border-black/30 shadow-2xl">
         <CardHeader>
           <CardTitle>Choose a new password</CardTitle>
         </CardHeader>

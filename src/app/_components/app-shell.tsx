@@ -1,6 +1,7 @@
 "use client";
 
 import { useSession } from "@/client/auth";
+import { Avatar } from "@/app/_components/avatar";
 import { useCall } from "@/app/_components/call";
 import { Conversation } from "@/app/_components/conversation";
 import { useRealtimeEvent } from "@/app/_components/realtime";
@@ -8,24 +9,14 @@ import { SignOutButton } from "@/app/_components/sign-out-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/trpc/react";
+import { Check, Phone, UserPlus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-function PresenceDot({ online }: { online: boolean }) {
-  return (
-    <span
-      className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
-        online ? "bg-green-500" : "bg-gray-300"
-      }`}
-      title={online ? "Online" : "Offline"}
-    />
-  );
-}
-
 /**
- * Discord-style home: a left sidebar with friends (presence + unread badges),
- * friend requests and an add-by-handle box, and a main pane with the selected
- * conversation.
+ * Discord-style home: a left sidebar with friends (avatars, presence + unread
+ * badges), friend requests and an add-by-handle box, and a main pane with the
+ * selected conversation.
  */
 export function AppShell() {
   const { data: session, isPending: sessionPending } = useSession();
@@ -130,70 +121,76 @@ export function AppShell() {
 
   if (sessionPending || !session || !myId) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        Loading...
+      <div className="flex min-h-screen items-center justify-center bg-[#313338] text-muted-foreground">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-600 border-t-indigo-500" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen bg-[#313338] text-[#dbdee1]">
       {/* Sidebar */}
-      <aside className="flex w-72 shrink-0 flex-col border-r bg-gray-50">
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <span className="font-bold">Relay</span>
-          <span className="text-sm text-gray-600">
-            @{profile.data?.username}
-          </span>
+      <aside className="flex w-72 shrink-0 flex-col bg-[#2b2d31]">
+        <div className="flex h-12 items-center border-b border-black/20 px-4 shadow-sm">
+          <span className="text-base font-bold tracking-tight">Relay</span>
         </div>
 
-        <div className="border-b p-3">
+        <div className="p-3">
           <form onSubmit={handleAdd} className="flex gap-2">
             <Input
               value={handle}
               onChange={(e) => setHandle(e.target.value)}
-              placeholder="Add by handle"
+              placeholder="Add a friend by handle"
               autoComplete="off"
+              className="h-9 border-none bg-[#1e1f22] text-sm placeholder:text-zinc-500 focus-visible:ring-0"
             />
-            <Button type="submit" disabled={sendRequest.isPending}>
-              Add
+            <Button
+              type="submit"
+              size="icon"
+              disabled={sendRequest.isPending}
+              className="shrink-0"
+              title="Send request"
+            >
+              <UserPlus />
             </Button>
           </form>
-          {notice && <p className="mt-2 text-xs text-gray-600">{notice}</p>}
+          {notice && <p className="mt-2 text-xs text-zinc-400">{notice}</p>}
         </div>
 
         {!!incoming.data?.length && (
-          <div className="border-b p-3">
-            <p className="mb-2 text-xs font-semibold uppercase text-gray-500">
-              Requests
+          <div className="px-3 pb-2">
+            <p className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wide text-zinc-400">
+              Pending — {incoming.data.length}
             </p>
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1">
               {incoming.data.map((r) => (
                 <div
                   key={r.id}
-                  className="flex items-center justify-between gap-2"
+                  className="flex items-center gap-2 rounded-md px-1 py-1"
                 >
-                  <span className="truncate text-sm">
+                  <Avatar handle={r.requester.username ?? "?"} size="sm" />
+                  <span className="truncate text-sm font-medium">
                     @{r.requester.username}
                   </span>
-                  <div className="flex gap-1">
-                    <Button
-                      size="sm"
+                  <div className="ml-auto flex gap-1">
+                    <button
                       onClick={() =>
                         respond.mutate({ friendshipId: r.id, accept: true })
                       }
+                      title="Accept"
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1e1f22] text-emerald-400 hover:bg-emerald-500 hover:text-white"
                     >
-                      ✓
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
+                      <Check size={16} />
+                    </button>
+                    <button
                       onClick={() =>
                         respond.mutate({ friendshipId: r.id, accept: false })
                       }
+                      title="Decline"
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1e1f22] text-rose-400 hover:bg-rose-500 hover:text-white"
                     >
-                      ✕
-                    </Button>
+                      <X size={16} />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -201,28 +198,34 @@ export function AppShell() {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-2">
-          <p className="px-2 py-1 text-xs font-semibold uppercase text-gray-500">
-            Friends
+        <div className="flex-1 overflow-y-auto px-2">
+          <p className="px-2 py-2 text-[11px] font-bold uppercase tracking-wide text-zinc-400">
+            Direct Messages
           </p>
           {!sortedFriends.length && (
-            <p className="px-2 text-sm text-gray-500">No friends yet.</p>
+            <p className="px-2 text-sm text-zinc-500">
+              No friends yet. Add someone by their handle above.
+            </p>
           )}
           {sortedFriends.map((f) => {
             const count = unreadByUser.get(f.id) ?? 0;
+            const isOnline = onlineIds.has(f.id);
             return (
               <button
                 key={f.id}
                 onClick={() => setSelected(f.id)}
-                className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-gray-200 ${
-                  selected === f.id ? "bg-gray-200" : ""
+                className={`group flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors ${
+                  selected === f.id
+                    ? "bg-[#404249] text-white"
+                    : "text-zinc-400 hover:bg-[#36373d] hover:text-zinc-200"
                 }`}
               >
-                <span className="flex items-center gap-2 truncate">
-                  <PresenceDot online={onlineIds.has(f.id)} />@{f.username}
+                <Avatar handle={f.username ?? "?"} size="sm" online={isOnline} />
+                <span className="truncate text-sm font-medium">
+                  {f.username}
                 </span>
                 {count > 0 && (
-                  <span className="ml-auto rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">
+                  <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-xs font-bold text-white">
                     {count}
                   </span>
                 )}
@@ -231,33 +234,50 @@ export function AppShell() {
           })}
         </div>
 
-        <div className="border-t p-3">
+        {/* User footer */}
+        <div className="flex items-center gap-2 bg-[#232428] px-2 py-2">
+          <Avatar handle={profile.data?.username ?? "?"} size="sm" online />
+          <div className="min-w-0 flex-1 leading-tight">
+            <p className="truncate text-sm font-semibold text-white">
+              {profile.data?.username ? `@${profile.data.username}` : "…"}
+            </p>
+            <p className="text-xs text-zinc-400">Online</p>
+          </div>
           <SignOutButton />
         </div>
       </aside>
 
       {/* Main pane */}
-      <main className="flex-1">
+      <main className="flex-1 bg-[#313338]">
         {selectedFriend?.username ? (
           <Conversation
             key={selectedFriend.id}
             myId={myId}
             otherUserId={selectedFriend.id}
             otherHandle={selectedFriend.username}
+            online={onlineIds.has(selectedFriend.id)}
             headerRight={
               <Button
-                size="sm"
-                variant="outline"
+                size="icon"
+                variant="ghost"
+                className="text-zinc-300 hover:text-white"
                 disabled={callState.phase !== "idle"}
                 onClick={() => void startCall(selectedFriend.id)}
+                title="Start voice call"
               >
-                📞 Call
+                <Phone />
               </Button>
             }
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-gray-500">
-            Select a friend to start chatting.
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-zinc-500">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#2b2d31] text-3xl">
+              👋
+            </div>
+            <p className="text-lg font-semibold text-zinc-300">
+              Welcome to Relay
+            </p>
+            <p className="text-sm">Pick a friend to start chatting or calling.</p>
           </div>
         )}
       </main>

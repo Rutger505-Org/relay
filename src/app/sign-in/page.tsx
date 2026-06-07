@@ -81,18 +81,22 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <Card className="w-full max-w-md">
+    <div className="flex min-h-screen items-center justify-center bg-[#1e1f22] p-4">
+      <Card className="w-full max-w-md border-black/30 shadow-2xl">
         <CardHeader>
+          <div className="mb-2 flex items-center justify-center gap-2">
+            <span className="text-2xl">🛰️</span>
+            <span className="text-xl font-bold tracking-tight">Relay</span>
+          </div>
           {/* Tabs make it unmistakable which action you're taking. */}
-          <div className="mb-2 grid grid-cols-2 gap-2 rounded-lg bg-gray-100 p-1">
+          <div className="mb-2 grid grid-cols-2 gap-1 rounded-lg bg-[#1e1f22] p-1">
             <button
               type="button"
               onClick={() => setMode("signin")}
               className={`rounded-md py-2 text-sm font-medium transition ${
                 mode === "signin"
-                  ? "bg-white shadow"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? "bg-indigo-600 text-white shadow"
+                  : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
               Sign in
@@ -102,14 +106,14 @@ export default function AuthPage() {
               onClick={() => setMode("signup")}
               className={`rounded-md py-2 text-sm font-medium transition ${
                 mode === "signup"
-                  ? "bg-white shadow"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? "bg-indigo-600 text-white shadow"
+                  : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
               Create account
             </button>
           </div>
-          <CardTitle>
+          <CardTitle className="text-center">
             {mode === "signin" ? "Welcome back" : "Create your account"}
           </CardTitle>
         </CardHeader>
