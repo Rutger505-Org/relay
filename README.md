@@ -97,3 +97,38 @@ Copy the file to your Windows filesystem with the following command:
 ```bash
 kubectl cp <namespace>/<pod-name>:/app/data/db.sqlite  /mnt/c/Users/<user>/Documents/
 ```
+
+### Voice calling (LiveKit)
+
+1:1 voice calls run over a **self-hosted LiveKit SFU**. The server is deployed by
+Terraform (`deploy/main.tf`) into the **same Kubernetes namespace as the app** —
+there is no separate LiveKit namespace.
+
+How it is wired:
+
+- **No GitHub secrets required.** The LiveKit API key/secret are generated per
+  environment with the `random` provider and injected into both the LiveKit
+  server and the app container (`LIVEKIT_URL`, `LIVEKIT_API_KEY`,
+  `LIVEKIT_API_SECRET`). These env vars are also recognised by the app if you
+  ever want to point at an external LiveKit instead (e.g. `DEPLOYMENT_LIVEKIT_URL`).
+- **Signaling (wss)** is served on port `7880` and exposed through the app's
+  existing Traefik ingress under the `/rtc` path, reusing the app hostname and
+  TLS certificate. The browser `livekit-client` SDK connects to
+  `wss://<hostname>/rtc`.
+- **WebRTC media** uses a single UDP port (`7882`) with a TCP fallback (`7881`),
+  exposed via a `LoadBalancer` service so clients reach the cluster node
+  directly.
+
+Cluster requirements:
+
+- The node's public IP must allow inbound **UDP 7882** and **TCP 7881** for
+  media to flow. Without these open, signaling still succeeds but audio fails to
+  connect.
+- On k3s (servicelb) the media `LoadBalancer` binds those ports on the node. If
+  multiple environments run on the same node they will contend for the same host
+  ports; production takes them and additional preview environments may show a
+  pending external IP for the media service.
+
+If LiveKit is not configured, the call API returns a clear
+`Voice calling is not configured on this server.` error and the rest of the app
+keeps working.
