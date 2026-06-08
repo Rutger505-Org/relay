@@ -1,6 +1,5 @@
 "use client";
 
-import { useSession } from "@/client/auth";
 import { Avatar } from "@/app/_components/avatar";
 import { useCall } from "@/app/_components/call";
 import { Conversation } from "@/app/_components/conversation";
@@ -10,37 +9,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/trpc/react";
 import { Check, Phone, UserPlus, X } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 /**
  * Discord-style home: a left sidebar with friends (avatars, presence + unread
  * badges), friend requests and an add-by-handle box, and a main pane with the
- * selected conversation.
+ * selected conversation. The authenticated user's id is provided by the server
+ * page, so there's no client session check or loading spinner.
  */
-export function AppShell() {
-  const { data: session, isPending: sessionPending } = useSession();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!sessionPending && !session) router.push("/sign-in");
-  }, [session, sessionPending, router]);
-
-  const myId = session?.user.id;
+export function AppShell({ myId }: { myId: string }) {
   const utils = api.useUtils();
   const { startCall, state: callState } = useCall();
 
-  const profile = api.me.profile.useQuery(undefined, { enabled: !!session });
-  const friends = api.friends.list.useQuery(undefined, { enabled: !!session });
-  const incoming = api.friends.incoming.useQuery(undefined, {
-    enabled: !!session,
-  });
-  const presence = api.friends.presence.useQuery(undefined, {
-    enabled: !!session,
-  });
-  const unread = api.messages.unreadCounts.useQuery(undefined, {
-    enabled: !!session,
-  });
+  const profile = api.me.profile.useQuery();
+  const friends = api.friends.list.useQuery();
+  const incoming = api.friends.incoming.useQuery();
+  const presence = api.friends.presence.useQuery();
+  const unread = api.messages.unreadCounts.useQuery();
 
   const [selected, setSelected] = useState<string | null>(null);
   const [handle, setHandle] = useState("");
@@ -118,14 +103,6 @@ export function AppShell() {
   }, [friends.data, onlineIds]);
 
   const selectedFriend = friends.data?.find((f) => f.id === selected);
-
-  if (sessionPending || !session || !myId) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#313338] text-muted-foreground">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-600 border-t-indigo-500" />
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-screen bg-[#313338] text-[#dbdee1]">
