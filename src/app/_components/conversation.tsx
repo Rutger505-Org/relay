@@ -184,7 +184,7 @@ export function Conversation({
           // Group consecutive text messages from the same sender.
           const prev = messages[i - 1];
           const grouped =
-            prev && prev.type === "text" && prev.senderId === m.senderId;
+            prev?.type === "text" && prev.senderId === m.senderId;
 
           return (
             <div

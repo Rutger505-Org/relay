@@ -6,7 +6,7 @@
     "dev": "bun --bun next dev --turbopack",
     "build": "bun --bun next build",
     "start": "bun --bun next start",
-    "lint": "bun --bun next lint",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
@@ -38,7 +38,7 @@
     "superjson": "^2.2.1",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
-    "zod": "^3.24.1"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@actions/github-script": "github:actions/github-script",
@@ -51,7 +51,7 @@
     "bun-types": "^1.2.2",
     "drizzle-kit": "^0.31.1",
     "eslint": "^9",
-    "eslint-config-next": "15.1.4",
+    "eslint-config-next": "^16.2.7",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-drizzle": "^0.2.3",
     "postcss": "^8",
