@@ -143,7 +143,7 @@ export const friendsRouter = createTRPCRouter({
         .where(eq(friendship.id, input.friendshipId))
         .limit(1);
 
-      if (!row || row.addresseeId !== me || row.status !== "pending") {
+      if (row?.addresseeId !== me || row.status !== "pending") {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Request not found.",
