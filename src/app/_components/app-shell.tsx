@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/trpc/react";
 import { Check, Phone, UserPlus, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 /**
  * Discord-style home: a left sidebar with friends (avatars, presence + unread
@@ -31,19 +31,29 @@ export function AppShell({ myId }: { myId: string }) {
   const [handle, setHandle] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
 
-  // Live presence map.
-  const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
-  useEffect(() => {
-    if (presence.data) setOnlineIds(new Set(presence.data));
-  }, [presence.data]);
+  // Live presence: the query provides the authoritative base set, and live
+  // presence events are layered on top as a delta overlay. Deriving the set
+  // during render (instead of syncing the query into state via an effect)
+  // avoids the cascading re-renders that react-hooks/set-state-in-effect warns
+  // about.
+  const [presenceOverlay, setPresenceOverlay] = useState<Map<string, boolean>>(
+    new Map(),
+  );
+  const onlineIds = useMemo(() => {
+    const set = new Set(presence.data ?? []);
+    for (const [userId, online] of presenceOverlay) {
+      if (online) set.add(userId);
+      else set.delete(userId);
+    }
+    return set;
+  }, [presence.data, presenceOverlay]);
 
   // React to all server pushes that affect the sidebar.
   useRealtimeEvent((event) => {
     if (event.type === "presence") {
-      setOnlineIds((prev) => {
-        const next = new Set(prev);
-        if (event.online) next.add(event.userId);
-        else next.delete(event.userId);
+      setPresenceOverlay((prev) => {
+        const next = new Map(prev);
+        next.set(event.userId, event.online);
         return next;
       });
     } else if (event.type === "friends") {

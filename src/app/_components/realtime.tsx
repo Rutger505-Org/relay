@@ -86,7 +86,12 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
 export function useRealtimeEvent(handler: Listener) {
   const ctx = useContext(RealtimeContext);
   const handlerRef = useRef(handler);
-  handlerRef.current = handler;
+
+  // Keep the ref pointing at the latest handler without re-subscribing.
+  // Assigning in an effect (not during render) satisfies react-hooks/refs.
+  useEffect(() => {
+    handlerRef.current = handler;
+  });
 
   useEffect(() => {
     if (!ctx) return;
