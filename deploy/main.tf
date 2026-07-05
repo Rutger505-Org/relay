@@ -212,9 +212,14 @@ resource "kubernetes_service" "livekit_media" {
   metadata {
     name      = "${var.application_name}-livekit-media"
     namespace = kubernetes_namespace.app.metadata[0].name
+    annotations = {
+      "metallb.universe.tf/allow-shared-ip" = "livekit-media"
+    }
   }
 
   spec {
+    load_balancer_ip = "192.168.178.231"
+
     selector = {
       app = "${var.application_name}-livekit"
     }
