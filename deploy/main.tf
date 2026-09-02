@@ -204,8 +204,9 @@ resource "kubernetes_service" "livekit" {
   }
 }
 
-# LoadBalancer service exposing WebRTC media on the node (single UDP port +
-# TCP fallback). On k3s this binds the ports on the node's IP via servicelb.
+# LoadBalancer service exposing WebRTC media (single UDP port + TCP fallback).
+# MetalLB assigns the fixed address below and announces it over L2; the router
+# forwards 7881/7882 to that IP.
 resource "kubernetes_service" "livekit_media" {
   depends_on = [kubernetes_namespace.app]
 
@@ -218,7 +219,7 @@ resource "kubernetes_service" "livekit_media" {
   }
 
   spec {
-    load_balancer_ip = "192.168.178.231"
+    load_balancer_ip = "192.168.178.233"
 
     selector = {
       app = "${var.application_name}-livekit"
