@@ -56,6 +56,12 @@ locals {
   livekit_api_key    = "API${random_id.livekit_api_key.hex}"
   livekit_api_secret = random_password.livekit_api_secret.result
 
+  # Only production pins the MetalLB address (see livekit_media below).
+  # The deploy workflow computes an is_production flag but does not forward it
+  # to OpenTofu, and certificate_issuer is already environment-specific:
+  # letsencrypt-production for main, letsencrypt-staging for every PR.
+  is_production = var.certificate_issuer == "letsencrypt-production"
+
   # The public wss:// URL clients connect to. Reuses the app hostname; the
   # SDK appends /rtc which the ingress routes to the LiveKit service.
   livekit_url = "wss://${var.hostname}"
@@ -205,8 +211,18 @@ resource "kubernetes_service" "livekit" {
 }
 
 # LoadBalancer service exposing WebRTC media (single UDP port + TCP fallback).
-# MetalLB assigns the fixed address below and announces it over L2; the router
-# forwards 7881/7882 to that IP.
+# MetalLB announces the address over L2; the router forwards 7881/7882 to the
+# production IP.
+#
+# Only production may pin 192.168.178.233. MetalLB can assign a given address
+# to more than one service only when their port/protocol sets do not overlap,
+# and every environment here exposes exactly 7881/TCP + 7882/UDP. So when a PR
+# environment also requested the address it could never be satisfied: the
+# service sat in <pending> forever, the kubernetes provider blocked waiting for
+# an ingress IP, and the apply died after ~10 minutes with
+#   client rate limiter Wait returned an error: context deadline exceeded
+# PR environments therefore leave the field unset and take any free address
+# from the pool.
 resource "kubernetes_service" "livekit_media" {
   depends_on = [kubernetes_namespace.app]
 
@@ -219,7 +235,7 @@ resource "kubernetes_service" "livekit_media" {
   }
 
   spec {
-    load_balancer_ip = "192.168.178.233"
+    load_balancer_ip = local.is_production ? "192.168.178.233" : null
 
     selector = {
       app = "${var.application_name}-livekit"
