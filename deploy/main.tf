@@ -56,6 +56,12 @@ locals {
   livekit_api_key    = "API${random_id.livekit_api_key.hex}"
   livekit_api_secret = random_password.livekit_api_secret.result
 
+  # Only production pins the MetalLB address (see livekit_media below).
+  # The deploy workflow computes an is_production flag but does not forward it
+  # to OpenTofu, and certificate_issuer is already environment-specific:
+  # letsencrypt-production for main, letsencrypt-staging for every PR.
+  is_production = var.certificate_issuer == "letsencrypt-production"
+
   # The public wss:// URL clients connect to. Reuses the app hostname; the
   # SDK appends /rtc which the ingress routes to the LiveKit service.
   livekit_url = "wss://${var.hostname}"
@@ -204,22 +210,41 @@ resource "kubernetes_service" "livekit" {
   }
 }
 
-# LoadBalancer service exposing WebRTC media (single UDP port + TCP fallback).
-# MetalLB assigns the fixed address below and announces it over L2; the router
-# forwards 7881/7882 to that IP.
+# WebRTC media (single UDP port + TCP fallback).
+#
+# Production only: a LoadBalancer pinned to 192.168.178.233, which MetalLB
+# announces over L2 and the router forwards 7881/7882 to.
+#
+# PR environments deliberately get a plain ClusterIP instead, so external
+# media does not work in a preview. Two reasons a LoadBalancer cannot work
+# there:
+#
+#   1. Pinning the same address in every environment is impossible. MetalLB
+#      shares one address between services only when their port/protocol sets
+#      do not overlap, and every environment exposes exactly 7881/TCP +
+#      7882/UDP, so allow-shared-ip cannot help.
+#   2. Leaving the address unset does not help either, because the MetalLB
+#      pool in 3-metallb-config is declared with autoAssign = false: an
+#      address is only ever handed out when a service asks for it explicitly.
+#
+# Either way the service stayed <pending> forever, the kubernetes provider
+# blocked waiting for an ingress IP, and the apply died after ~10 minutes with
+#   client rate limiter Wait returned an error: context deadline exceeded
+# which broke every PR deploy (and every push to main) since 2026-09-02.
 resource "kubernetes_service" "livekit_media" {
   depends_on = [kubernetes_namespace.app]
 
   metadata {
     name      = "${var.application_name}-livekit-media"
     namespace = kubernetes_namespace.app.metadata[0].name
-    annotations = {
+    # Only meaningful for the production LoadBalancer.
+    annotations = local.is_production ? {
       "metallb.universe.tf/allow-shared-ip" = "livekit-media"
-    }
+    } : {}
   }
 
   spec {
-    load_balancer_ip = "192.168.178.233"
+    load_balancer_ip = local.is_production ? "192.168.178.233" : null
 
     selector = {
       app = "${var.application_name}-livekit"
@@ -238,7 +263,7 @@ resource "kubernetes_service" "livekit_media" {
       protocol    = "UDP"
     }
 
-    type = "LoadBalancer"
+    type = local.is_production ? "LoadBalancer" : "ClusterIP"
   }
 }
 
