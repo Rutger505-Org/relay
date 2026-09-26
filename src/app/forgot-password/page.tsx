@@ -1,6 +1,6 @@
 "use client";
 
-import { forgetPassword } from "@/client/auth";
+import { requestPasswordReset } from "@/client/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,7 @@ export default function ForgotPasswordPage() {
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const res = await forgetPassword({
+      const res = await requestPasswordReset({
         email,
         redirectTo: "/reset-password",
       });
