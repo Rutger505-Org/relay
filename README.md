@@ -115,19 +115,18 @@ How it is wired:
   existing Traefik ingress under the `/rtc` path, reusing the app hostname and
   TLS certificate. The browser `livekit-client` SDK connects to
   `wss://<hostname>/rtc`.
-- **WebRTC media** uses a single UDP port (`7882`) with a TCP fallback (`7881`),
-  exposed via a `LoadBalancer` service so clients reach the cluster node
-  directly.
+- **WebRTC media** uses a single UDP port (`7882`) with a TCP fallback (`7881`).
+  In production it is exposed via a MetalLB `LoadBalancer` pinned to
+  `192.168.178.233` so clients reach it directly. PR previews get a `ClusterIP`
+  service instead, so voice calls only connect in production.
+- Production is detected by the OpenTofu workspace (`production` vs `pr-<number>`),
+  not the certificate issuer: every environment uses Let's Encrypt production certs.
 
 Cluster requirements:
 
-- The node's public IP must allow inbound **UDP 7882** and **TCP 7881** for
-  media to flow. Without these open, signaling still succeeds but audio fails to
-  connect.
-- On k3s (servicelb) the media `LoadBalancer` binds those ports on the node. If
-  multiple environments run on the same node they will contend for the same host
-  ports; production takes them and additional preview environments may show a
-  pending external IP for the media service.
+- The router must forward inbound **UDP 7882** and **TCP 7881** to
+  `192.168.178.233` for media to flow. Without these open, signaling still
+  succeeds but audio fails to connect.
 
 If LiveKit is not configured, the call API returns a clear
 `Voice calling is not configured on this server.` error and the rest of the app
