@@ -29,7 +29,7 @@ bun dev
 #### Variables
 
 - `APPLICATION_NAME` - Used as an identifier for multiple actions such as the Kubernetes deployment name and Terraform workspace.
-- `BASE_DOMAIN` - Domain where to host the application. Tags are deployed to this domain; pull requests to a subdomain using the commit SHA (e.g. `<sha>.yourdomain.com`).
+- `BASE_DOMAIN` - Domain where to host the application. `main` is deployed to this domain; pull requests to `pr-<number>.<BASE_DOMAIN>`.
 - `DEPLOYMENT_AUTH_EMAIL_FROM` - Name and email address of the magic link sender (e.g. `Next Template`).
 
 The following variables are configured at the organisation level and are inherited automatically — no action needed per repository.

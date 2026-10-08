@@ -57,10 +57,9 @@ locals {
   livekit_api_secret = random_password.livekit_api_secret.result
 
   # Only production pins the MetalLB address (see livekit_media below).
-  # The deploy workflow computes an is_production flag but does not forward it
-  # to OpenTofu, and certificate_issuer is already environment-specific:
-  # letsencrypt-production for main, letsencrypt-staging for every PR.
-  is_production = var.certificate_issuer == "letsencrypt-production"
+  # The deploy workflow doesn't forward its is_production flag, but it selects
+  # one OpenTofu workspace per environment: production or pr-<n>.
+  is_production = terraform.workspace == "production"
 
   # The public wss:// URL clients connect to. Reuses the app hostname; the
   # SDK appends /rtc which the ingress routes to the LiveKit service.
