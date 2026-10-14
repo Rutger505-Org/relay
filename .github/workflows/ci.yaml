@@ -8,6 +8,8 @@ on:
     types: [opened, synchronize, reopened, closed]
     branches:
       - "*"
+  # Redeploys production from main, e.g. after changing a secret or variable.
+  workflow_dispatch:
 
 jobs:
   code-quality:
