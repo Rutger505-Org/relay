@@ -446,17 +446,44 @@ resource "kubernetes_service" "app" {
   }
 }
 
+# Keep previews out of search results. A header instead of a robots.txt
+# Disallow: Google must be able to crawl a page to see its noindex.
+resource "kubernetes_manifest" "noindex" {
+  count      = local.is_production ? 0 : 1
+  depends_on = [kubernetes_namespace.app]
+
+  manifest = {
+    apiVersion = "traefik.io/v1alpha1"
+    kind       = "Middleware"
+    metadata = {
+      name      = "noindex"
+      namespace = kubernetes_namespace.app.metadata[0].name
+    }
+    spec = {
+      headers = {
+        customResponseHeaders = {
+          "X-Robots-Tag" = "noindex, nofollow"
+        }
+      }
+    }
+  }
+}
+
 # Ingress
 resource "kubernetes_ingress_v1" "app" {
   depends_on = [
     kubernetes_namespace.app,
     kubernetes_service.app,
     kubernetes_service.livekit,
+    kubernetes_manifest.noindex,
   ]
 
   metadata {
     name      = "${var.application_name}-ingress"
     namespace = kubernetes_namespace.app.metadata[0].name
+    annotations = local.is_production ? {} : {
+      "traefik.ingress.kubernetes.io/router.middlewares" = "${kubernetes_namespace.app.metadata[0].name}-noindex@kubernetescrd"
+    }
   }
 
   spec {
