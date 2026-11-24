@@ -1,6 +1,6 @@
-# Next template
+# Relay
 
-Next.js template for my personal needs.
+Friends, direct messages and 1:1 voice calls (self-hosted LiveKit). Built from [nextjs-template](https://github.com/Rutger505-Org/nextjs-template).
 
 ## Getting started
 
